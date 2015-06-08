@@ -1110,6 +1110,7 @@ bgp_init(struct proto_config *C)
   P->reload_routes = bgp_reload_routes;
   P->feed_done = bgp_feed_done;
   P->rte_better = bgp_rte_better;
+  P->rte_mergable = bgp_rte_mergable;
   P->rte_recalculate = c->deterministic_med ? bgp_rte_recalculate : NULL;
 
   p->cf = c;
