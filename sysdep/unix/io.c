@@ -36,6 +36,7 @@
 #include "lib/event.h"
 #include "lib/string.h"
 #include "nest/iface.h"
+#include "lib/tcp-md5-signature.h"
 
 #include "lib/unix.h"
 #include "lib/sysio.h"
@@ -946,29 +947,7 @@ sk_set_min_ttl(sock *s, int ttl)
     return sk_set_min_ttl6(s, ttl);
 }
 
-#if 0
-/**
- * sk_set_md5_auth - add / remove MD5 security association for given socket
- * @s: socket
- * @a: IP address of the other side
- * @ifa: Interface for link-local IP address
- * @passwd: password used for MD5 authentication
- *
- * In TCP MD5 handling code in kernel, there is a set of pairs (address,
- * password) used to choose password according to address of the other side.
- * This function is useful for listening socket, for active sockets it is enough
- * to set s->password field.
- *
- * When called with passwd != NULL, the new pair is added,
- * When called with passwd == NULL, the existing pair is removed.
- *
- * Result: 0 for success, -1 for an error.
- */
 
-int
-sk_set_md5_auth(sock *s, ip_addr a, struct iface *ifa, char *passwd)
-{ DUMMY; }
-#endif
 
 /**
  * sk_set_ipv6_checksum - specify IPv6 checksum offset for given socket
@@ -1067,6 +1046,9 @@ sk_free(resource *r)
   sk_free_bufs(s);
   if (s->fd >= 0)
   {
+    if (s->password)
+      sk_unset_md5_auth_connecting(s, s->saddr, s->daddr, s->iface);
+
     close(s->fd);
 
     /* FIXME: we should call sk_stop() for SKF_THREAD sockets */
@@ -1454,9 +1436,10 @@ sk_open(sock *s)
   }
 
   if (s->password)
-    if (sk_set_md5_auth(s, s->daddr, s->iface, s->password) < 0)
+  {
+    if (sk_set_md5_auth_connecting(s, s->saddr, s->daddr, s->iface, s->password) < 0)
       goto err;
-
+  }
   switch (s->type)
   {
   case SK_TCP_ACTIVE:
