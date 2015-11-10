@@ -219,15 +219,75 @@ nl_checkin(struct nlmsghdr *h, int lsize)
   return NLMSG_DATA(h);
 }
 
+#define NL_WANT_ATTR_VARSIZE  0xff
+
+struct nl_want_attrs {
+  u8 size;
+  u8 required:1;
+};
+
+#define BIRD_IFA_MAX  (IFA_ANYCAST+1)
+
+static struct nl_want_attrs ifa_attr_want4[BIRD_IFA_MAX] = {
+  [IFA_ADDRESS]	  = { sizeof(ip4_addr), 1 },
+  [IFA_LOCAL]	  = { sizeof(ip4_addr), 1 },
+  [IFA_BROADCAST] = { sizeof(ip4_addr), 0 },
+};
+
+static struct nl_want_attrs ifa_attr_want6[BIRD_IFA_MAX] = {
+  [IFA_ADDRESS]	  = { sizeof(ip6_addr), 1 },
+  [IFA_LOCAL]	  = { sizeof(ip6_addr), 0 },
+};
+
+#define BIRD_IFLA_MAX (IFLA_WIRELESS+1)
+
+static struct nl_want_attrs ifla_attr_want[BIRD_IFLA_MAX] = {
+  [IFLA_IFNAME]	  = { NL_WANT_ATTR_VARSIZE, 1 },
+  [IFLA_MTU]	  = { sizeof(u32), 1 },
+  [IFLA_WIRELESS] = { NL_WANT_ATTR_VARSIZE, 0 },
+};
+
+#define BIRD_RTA_MAX  (RTA_CACHEINFO+1)
+
+static struct nl_want_attrs mpnh_attr_want4[BIRD_RTA_MAX] = {
+  [RTA_GATEWAY]	  = { sizeof(ip4_addr), 1 },
+};
+
+static struct nl_want_attrs rtm_attr_want4[BIRD_RTA_MAX] = {
+  [RTA_DST]	  = { sizeof(ip4_addr), 0 },
+  [RTA_OIF]	  = { sizeof(u32), 0 },
+  [RTA_GATEWAY]	  = { sizeof(ip4_addr), 0 },
+  [RTA_PRIORITY]  = { sizeof(u32), 0 },
+  [RTA_PREFSRC]	  = { sizeof(ip4_addr), 0 },
+  [RTA_FLOW]	  = { sizeof(u32), 0 },
+};
+
+static struct nl_want_attrs rtm_attr_want6[BIRD_RTA_MAX] = {
+  [RTA_DST]	  = { sizeof(ip6_addr), 0 },
+  [RTA_IIF]	  = { sizeof(u32), 0 },
+  [RTA_OIF]	  = { sizeof(u32), 0 },
+  [RTA_GATEWAY]	  = { sizeof(ip6_addr), 0 },
+  [RTA_PRIORITY]  = { sizeof(u32), 0 },
+  [RTA_PREFSRC]	  = { sizeof(ip6_addr), 0 },
+  [RTA_FLOW]	  = { sizeof(u32), 0 },
+  [RTA_MULTIPATH] = { NL_WANT_ATTR_VARSIZE, 0 },
+  [RTA_METRICS]	  = { NL_WANT_ATTR_VARSIZE, 0 },
+};
+
 static int
-nl_parse_attrs(struct rtattr *a, struct rtattr **k, int ksize)
+nl_parse_attrs(struct rtattr *a, struct nl_want_attrs *want, struct rtattr **k, int ksize)
 {
   int max = ksize / sizeof(struct rtattr *);
   bzero(k, ksize);
   while (RTA_OK(a, nl_attr_len))
     {
-      if (a->rta_type < max)
+      if ((a->rta_type < max) &&
+	   RTA_PAYLOAD(a) && (
+	    (RTA_PAYLOAD(a) == want[a->rta_type].size) ||
+	    (RTA_PAYLOAD(a) == NL_WANT_ATTR_VARSIZE)
+	  ))
 	k[a->rta_type] = a;
+
       a = RTA_NEXT(a, nl_attr_len);
     }
   if (nl_attr_len)
@@ -235,8 +295,15 @@ nl_parse_attrs(struct rtattr *a, struct rtattr **k, int ksize)
       log(L_ERR "nl_parse_attrs: remnant of size %d", nl_attr_len);
       return 0;
     }
-  else
-    return 1;
+  int i; for (i=0; i<max; i++)
+    {
+      if (want[i].required && !k[i])
+	{
+	  log(L_ERR "nl_parse_attrs: missing required attribute (%d)", i);
+	  return 0;
+	}
+    }
+  return 1;
 }
 
 static inline ip4_addr rta_get_u32(struct rtattr *a)
@@ -343,7 +410,7 @@ nl_parse_multipath(struct krt_proto *p, struct rtattr *ra)
   static int nh_buf_size;	/* in number of structures */
   static int nh_buf_used;
 
-  struct rtattr *a[RTA_CACHEINFO+1];
+  struct rtattr *a[BIRD_RTA_MAX];
   struct rtnexthop *nh = RTA_DATA(ra);
   struct mpnh *rv, *first, **last;
   int len = RTA_PAYLOAD(ra);
@@ -374,12 +441,9 @@ nl_parse_multipath(struct krt_proto *p, struct rtattr *ra)
 
       /* Nonexistent RTNH_PAYLOAD ?? */
       nl_attr_len = nh->rtnh_len - RTNH_LENGTH(0);
-      nl_parse_attrs(RTNH_DATA(nh), a, sizeof(a));
+      nl_parse_attrs(RTNH_DATA(nh), mpnh_attr_want4, a, sizeof(a));
       if (a[RTA_GATEWAY])
 	{
-	  if (RTA_PAYLOAD(a[RTA_GATEWAY]) != sizeof(ip_addr))
-	    return NULL;
-
 	  memcpy(&rv->gw, RTA_DATA(a[RTA_GATEWAY]), sizeof(ip_addr));
 	  ipa_ntoh(rv->gw);
 
@@ -448,7 +512,7 @@ static void
 nl_parse_link(struct nlmsghdr *h, int scan)
 {
   struct ifinfomsg *i;
-  struct rtattr *a[IFLA_WIRELESS+1];
+  struct rtattr *a[BIRD_IFLA_MAX];
   int new = h->nlmsg_type == RTM_NEWLINK;
   struct iface f = {};
   struct iface *ifi;
@@ -456,15 +520,16 @@ nl_parse_link(struct nlmsghdr *h, int scan)
   u32 mtu;
   uint fl;
 
-  if (!(i = nl_checkin(h, sizeof(*i))) || !nl_parse_attrs(IFLA_RTA(i), a, sizeof(a)))
+  if (!(i = nl_checkin(h, sizeof(*i))))
     return;
-  if (!a[IFLA_IFNAME] || RTA_PAYLOAD(a[IFLA_IFNAME]) < 2 ||
-      !a[IFLA_MTU] || RTA_PAYLOAD(a[IFLA_MTU]) != 4)
+  if (!nl_parse_attrs(IFLA_RTA(i), ifla_attr_want, a, sizeof(a)) ||
+      RTA_PAYLOAD(a[IFLA_IFNAME]) < 2)
     {
       if (scan || !a[IFLA_WIRELESS])
         log(L_ERR "nl_parse_link: Malformed message received");
       return;
     }
+
   name = RTA_DATA(a[IFLA_IFNAME]);
   mtu = rta_get_u32(a[IFLA_MTU]);
 
@@ -515,27 +580,34 @@ static void
 nl_parse_addr(struct nlmsghdr *h, int scan)
 {
   struct ifaddrmsg *i;
-  struct rtattr *a[IFA_ANYCAST+1];
+  struct rtattr *a[BIRD_IFA_MAX];
   int new = h->nlmsg_type == RTM_NEWADDR;
   struct ifa ifa;
   struct iface *ifi;
   int scope;
 
-  if (!(i = nl_checkin(h, sizeof(*i))) || !nl_parse_attrs(IFA_RTA(i), a, sizeof(a)))
+  if (!(i = nl_checkin(h, sizeof(*i))))
     return;
-  if (i->ifa_family != BIRD_AF)
-    return;
-  if (!a[IFA_ADDRESS] || RTA_PAYLOAD(a[IFA_ADDRESS]) != sizeof(ip_addr)
-#ifdef IPV6
-      || a[IFA_LOCAL] && RTA_PAYLOAD(a[IFA_LOCAL]) != sizeof(ip_addr)
-#else
-      || !a[IFA_LOCAL] || RTA_PAYLOAD(a[IFA_LOCAL]) != sizeof(ip_addr)
-      || (a[IFA_BROADCAST] && RTA_PAYLOAD(a[IFA_BROADCAST]) != sizeof(ip_addr))
-#endif
-      )
+
+  switch (i->ifa_family)
     {
-      log(L_ERR "nl_parse_addr: Malformed message received");
-      return;
+      case AF_INET:
+	if (!nl_parse_attrs(IFA_RTA(i), ifa_attr_want4, a, sizeof(a)))
+	  {
+	    log(L_ERR "nl_parse_addr: Malformed message received");
+	    return;
+	  }
+	break;
+      case AF_INET6:
+	if (!nl_parse_attrs(IFA_RTA(i), ifa_attr_want6, a, sizeof(a)))
+	  {
+	    log(L_ERR "nl_parse_addr: Malformed message received");
+	    return;
+	  }
+	break;
+      default:
+	log(L_ERR "nl_parse_addr: Unknown protocol message received (%d)", i->ifa_family);
+	return;
     }
 
   ifi = if_find_by_index(i->ifa_index);
@@ -809,30 +881,37 @@ nl_parse_route(struct nlmsghdr *h, int scan)
 {
   struct krt_proto *p;
   struct rtmsg *i;
-  struct rtattr *a[RTA_CACHEINFO+1];
+  struct rtattr *a[BIRD_RTA_MAX];
   int new = h->nlmsg_type == RTM_NEWROUTE;
 
   ip_addr dst = IPA_NONE;
   u32 oif = ~0;
   int src;
 
-  if (!(i = nl_checkin(h, sizeof(*i))) || !nl_parse_attrs(RTM_RTA(i), a, sizeof(a)))
+  if (!(i = nl_checkin(h, sizeof(*i))))
     return;
-  if (i->rtm_family != BIRD_AF)
-    return;
-  if ((a[RTA_DST] && RTA_PAYLOAD(a[RTA_DST]) != sizeof(ip_addr)) ||
-#ifdef IPV6
-      (a[RTA_IIF] && RTA_PAYLOAD(a[RTA_IIF]) != 4) ||
-#endif
-      (a[RTA_OIF] && RTA_PAYLOAD(a[RTA_OIF]) != 4) ||
-      (a[RTA_GATEWAY] && RTA_PAYLOAD(a[RTA_GATEWAY]) != sizeof(ip_addr)) ||
-      (a[RTA_PRIORITY] && RTA_PAYLOAD(a[RTA_PRIORITY]) != 4) ||
-      (a[RTA_PREFSRC] && RTA_PAYLOAD(a[RTA_PREFSRC]) != sizeof(ip_addr)) ||
-      (a[RTA_FLOW] && RTA_PAYLOAD(a[RTA_FLOW]) != 4))
+
+  switch (i->rtm_family)
     {
-      log(L_ERR "KRT: Malformed message received");
-      return;
+      case AF_INET:
+	if (!nl_parse_attrs(RTM_RTA(i), rtm_attr_want4, a, sizeof(a)))
+	  {
+	    log(L_ERR "nl_parse_addr: Malformed message received");
+	    return;
+	  }
+	break;
+      case AF_INET6:
+	if (!nl_parse_attrs(RTM_RTA(i), rtm_attr_want6, a, sizeof(a)))
+	  {
+	    log(L_ERR "nl_parse_addr: Malformed message received");
+	    return;
+	  }
+	break;
+      default:
+	log(L_ERR "nl_parse_addr: Unknown protocol message received (%d)", i->rtm_family);
+	return;
     }
+
 
   if (a[RTA_DST])
     {
