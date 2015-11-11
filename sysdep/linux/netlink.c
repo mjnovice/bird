@@ -602,6 +602,7 @@ nl_parse_addr(struct nlmsghdr *h, int scan)
 
   switch (i->ifa_family)
     {
+#ifndef IPV6
       case AF_INET:
 	if (!nl_parse_attrs(IFA_RTA(i), ifa_attr_want4, a, sizeof(a)))
 	  return;
@@ -611,10 +612,12 @@ nl_parse_addr(struct nlmsghdr *h, int scan)
 	    return;
 	  }
 	break;
+#else
       case AF_INET6:
 	if (!nl_parse_attrs(IFA_RTA(i), ifa_attr_want6, a, sizeof(a)))
 	  return;
 	break;
+#endif
       default:
 	return;
     }
@@ -928,14 +931,17 @@ nl_parse_route(struct nlmsghdr *h, int scan)
 
   switch (i->rtm_family)
     {
+#ifndef IPV6
       case AF_INET:
 	if (!nl_parse_attrs(RTM_RTA(i), rtm_attr_want4, a, sizeof(a)))
 	  return;
 	break;
+#else
       case AF_INET6:
 	if (!nl_parse_attrs(RTM_RTA(i), rtm_attr_want6, a, sizeof(a)))
 	  return;
 	break;
+#endif
       default:
 	return;
     }
