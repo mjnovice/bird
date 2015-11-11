@@ -221,7 +221,6 @@ nl_checkin(struct nlmsghdr *h, int lsize)
 
 struct nl_want_attrs {
   u8 defined:1;
-  u8 required:1;
   u8 checksize:1;
   u8 size;
 };
@@ -229,57 +228,54 @@ struct nl_want_attrs {
 #define BIRD_IFA_MAX  (IFA_ANYCAST+1)
 
 static struct nl_want_attrs ifa_attr_want4[BIRD_IFA_MAX] = {
-  [IFA_ADDRESS]	  = { 1, 1, 1, sizeof(ip4_addr) },
-  [IFA_LOCAL]	  = { 1, 1, 1, sizeof(ip4_addr) },
-  [IFA_BROADCAST] = { 1, 0, 1, sizeof(ip4_addr) },
+  [IFA_ADDRESS]	  = { 1, 1, sizeof(ip4_addr) },
+  [IFA_LOCAL]	  = { 1, 1, sizeof(ip4_addr) },
+  [IFA_BROADCAST] = { 1, 1, sizeof(ip4_addr) },
 };
 
 static struct nl_want_attrs ifa_attr_want6[BIRD_IFA_MAX] = {
-  [IFA_ADDRESS]	  = { 1, 1, 1, sizeof(ip6_addr) },
-  [IFA_LOCAL]	  = { 1, 0, 1, sizeof(ip6_addr) },
+  [IFA_ADDRESS]	  = { 1, 1, sizeof(ip6_addr) },
+  [IFA_LOCAL]	  = { 1, 1, sizeof(ip6_addr) },
 };
 
 #define BIRD_IFLA_MAX (IFLA_WIRELESS+1)
 
 /* IFLA_IFNAME and IFLA_MTU are required, in fact, but there may also come
  * a message with IFLA_WIRELESS set, where (e.g.) no IFLA_IFNAME exists. We
- * want to ignore all messages with IFLA_WIRELESS without notice but having
- * IFLA_(IFNAME|MTU) set to required leads to an unwanted (misleading) error
- * message. Setting these attributes non-required, just to parse them.
- * Přesence of IFLA_(IFNAME|MTU) is checked later in nl_parse_link(). */
+ * may simply ignore all messages with IFLA_WIRELESS without notice. */
 
 static struct nl_want_attrs ifla_attr_want[BIRD_IFLA_MAX] = {
-  [IFLA_IFNAME]	  = { 1, 0, 0, 0 },
-  [IFLA_MTU]	  = { 1, 0, 1, sizeof(u32) },
-  [IFLA_WIRELESS] = { 1, 0, 0, 0 },
+  [IFLA_IFNAME]	  = { 1, 0, 0 },
+  [IFLA_MTU]	  = { 1, 1, sizeof(u32) },
+  [IFLA_WIRELESS] = { 1, 0, 0 },
 };
 
 #define BIRD_RTA_MAX  (RTA_CACHEINFO+1)
 
 static struct nl_want_attrs mpnh_attr_want4[BIRD_RTA_MAX] = {
-  [RTA_GATEWAY]	  = { 1, 1, 1, sizeof(ip4_addr) },
+  [RTA_GATEWAY]	  = { 1, 1, sizeof(ip4_addr) },
 };
 
 static struct nl_want_attrs rtm_attr_want4[BIRD_RTA_MAX] = {
-  [RTA_DST]	  = { 1, 0, 1, sizeof(ip4_addr) },
-  [RTA_OIF]	  = { 1, 0, 1, sizeof(u32) },
-  [RTA_GATEWAY]	  = { 1, 0, 1, sizeof(ip4_addr) },
-  [RTA_PRIORITY]  = { 1, 0, 1, sizeof(u32) },
-  [RTA_PREFSRC]	  = { 1, 0, 1, sizeof(ip4_addr) },
-  [RTA_FLOW]	  = { 1, 0, 1, sizeof(u32) },
-  [RTA_MULTIPATH] = { 1, 0, 0, 0 },
-  [RTA_METRICS]	  = { 1, 0, 0, 0 },
+  [RTA_DST]	  = { 1, 1, sizeof(ip4_addr) },
+  [RTA_OIF]	  = { 1, 1, sizeof(u32) },
+  [RTA_GATEWAY]	  = { 1, 1, sizeof(ip4_addr) },
+  [RTA_PRIORITY]  = { 1, 1, sizeof(u32) },
+  [RTA_PREFSRC]	  = { 1, 1, sizeof(ip4_addr) },
+  [RTA_FLOW]	  = { 1, 1, sizeof(u32) },
+  [RTA_MULTIPATH] = { 1, 0, 0 },
+  [RTA_METRICS]	  = { 1, 0, 0 },
 };
 
 static struct nl_want_attrs rtm_attr_want6[BIRD_RTA_MAX] = {
-  [RTA_DST]	  = { 1, 0, 1, sizeof(ip6_addr) },
-  [RTA_IIF]	  = { 1, 0, 1, sizeof(u32) },
-  [RTA_OIF]	  = { 1, 0, 1, sizeof(u32) },
-  [RTA_GATEWAY]	  = { 1, 0, 1, sizeof(ip6_addr) },
-  [RTA_PRIORITY]  = { 1, 0, 1, sizeof(u32) },
-  [RTA_PREFSRC]	  = { 1, 0, 1, sizeof(ip6_addr) },
-  [RTA_FLOW]	  = { 1, 0, 1, sizeof(u32) },
-  [RTA_METRICS]	  = { 1, 0, 0, 0 },
+  [RTA_DST]	  = { 1, 1, sizeof(ip6_addr) },
+  [RTA_IIF]	  = { 1, 1, sizeof(u32) },
+  [RTA_OIF]	  = { 1, 1, sizeof(u32) },
+  [RTA_GATEWAY]	  = { 1, 1, sizeof(ip6_addr) },
+  [RTA_PRIORITY]  = { 1, 1, sizeof(u32) },
+  [RTA_PREFSRC]	  = { 1, 1, sizeof(ip6_addr) },
+  [RTA_FLOW]	  = { 1, 1, sizeof(u32) },
+  [RTA_METRICS]	  = { 1, 0, 0 },
 };
 
 static int
@@ -306,16 +302,6 @@ nl_parse_attrs(struct rtattr *a, struct nl_want_attrs *want, struct rtattr **k, 
     {
       log(L_ERR "nl_parse_attrs: remnant of size %d", nl_attr_len);
       return 0;
-    }
-
-  int i;
-  for (i=0; i<max; i++)
-    {
-      if (want[i].required && !k[i])
-	{
-	  log(L_ERR "nl_parse_attrs: missing required attribute (%d)", i);
-	  return 0;
-	}
     }
 
   return 1;
@@ -535,14 +521,13 @@ nl_parse_link(struct nlmsghdr *h, int scan)
   u32 mtu;
   uint fl;
 
-  if (!(i = nl_checkin(h, sizeof(*i))))
-    return;
-  if (!nl_parse_attrs(IFLA_RTA(i), ifla_attr_want, a, sizeof(a)))
-    return;
-  if (a[IFLA_WIRELESS]) /* This is a wireless event (see <linux/wireless.h>), ignoring at all */
+  if (!(i = nl_checkin(h, sizeof(*i))) || !nl_parse_attrs(IFLA_RTA(i), ifla_attr_want, a, sizeof(a)))
     return;
   if (!a[IFLA_IFNAME] || (RTA_PAYLOAD(a[IFLA_IFNAME]) < 2) || !a[IFLA_MTU])
     {
+      if (a[IFLA_WIRELESS]) /* This is a wireless-only event (see <linux/wireless.h>), ignoring */
+	return;
+
       log(L_ERR "KIF: Malformed message received");
       return;
     }
@@ -611,14 +596,24 @@ nl_parse_addr(struct nlmsghdr *h, int scan)
       case AF_INET:
 	if (!nl_parse_attrs(IFA_RTA(i), ifa_attr_want4, a, sizeof(a)))
 	  return;
+	if (!a[IFA_LOCAL])
+	  {
+	    log(L_ERR "KIF: Malformed message received (missing IFA_LOCAL)");
+	    return;
+	  }
 	break;
       case AF_INET6:
 	if (!nl_parse_attrs(IFA_RTA(i), ifa_attr_want6, a, sizeof(a)))
 	  return;
 	break;
       default:
-	log(L_WARN "nl_parse_addr: Unknown protocol family received (%d)", i->ifa_family);
 	return;
+    }
+
+  if (!a[IFA_ADDRESS])
+    {
+      log(L_ERR "KIF: Malformed message received (missing IFA_ADDRESS)");
+      return;
     }
 
   ifi = if_find_by_index(i->ifa_index);
@@ -913,7 +908,6 @@ nl_parse_route(struct nlmsghdr *h, int scan)
 	  return;
 	break;
       default:
-	log(L_WARN "KRT: Unknown protocol family received (%d)", i->rtm_family);
 	return;
     }
 
