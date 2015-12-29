@@ -67,7 +67,9 @@ void sk_set_tbuf(sock *s, void *tbuf);	/* Switch TX buffer, NULL-> return to int
 void sk_dump_all(void);
 
 int sk_is_ipv4(sock *s);		/* True if socket is IPv4 */
+int sk_is_ipv4_only(sock *s);		/* True if socket is IPv4-only */
 int sk_is_ipv6(sock *s);		/* True if socket is IPv6 */
+int sk_is_ipv6_only(sock *s);		/* True if socket is IPv6-only */
 
 static inline int sk_send_buffer_empty(sock *sk)
 { return sk->tbuf == sk->tpos; }

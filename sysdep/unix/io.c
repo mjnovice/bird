@@ -807,13 +807,16 @@ sk_skip_ip_header(byte *pkt, int *len)
   return pkt + hlen;
 }
 
+/* XXXX: What exactly happens when receiving IPv4 packet
+ * on IPv6 socket? (Currently not used this way.) */
+
 byte *
 sk_rx_buffer(sock *s, int *len)
 {
-  if (sk_is_ipv4(s) && (s->type == SK_IP))
-    return sk_skip_ip_header(s->rbuf, len);
-  else
+  if (sk_is_ipv6(s) || (s->type != SK_IP))
     return s->rbuf;
+  else
+    return sk_skip_ip_header(s->rbuf, len);
 }
 
 
@@ -835,11 +838,17 @@ int
 sk_setup_multicast(sock *s)
 {
   ASSERT(s->iface);
+  int rc = 0;
 
   if (sk_is_ipv4(s))
-    return sk_setup_multicast4(s);
-  else
-    return sk_setup_multicast6(s);
+    rc = sk_setup_multicast4(s);
+
+  if (rc) return rc;
+
+  if (sk_is_ipv6(s))
+    rc = sk_setup_multicast6(s);
+
+  return rc;
 }
 
 /**
@@ -856,10 +865,17 @@ sk_setup_multicast(sock *s)
 int
 sk_join_group(sock *s, ip_addr maddr)
 {
+  int rc = 0;
+
   if (sk_is_ipv4(s))
-    return sk_join_group4(s, maddr);
-  else
-    return sk_join_group6(s, maddr);
+    rc = sk_join_group4(s, maddr);
+
+  if (rc) return rc;
+
+  if (sk_is_ipv6(s))
+    rc = sk_join_group6(s, maddr);
+  
+  return rc;
 }
 
 /**
@@ -876,10 +892,17 @@ sk_join_group(sock *s, ip_addr maddr)
 int
 sk_leave_group(sock *s, ip_addr maddr)
 {
+  int rc = 0;
+
   if (sk_is_ipv4(s))
-    return sk_leave_group4(s, maddr);
-  else
-    return sk_leave_group6(s, maddr);
+    rc = sk_leave_group4(s, maddr);
+
+  if (rc) return rc;
+
+  if (sk_is_ipv6(s))
+    rc = sk_leave_group6(s, maddr);
+
+  return rc;
 }
 
 /**
@@ -919,11 +942,17 @@ int
 sk_set_ttl(sock *s, int ttl)
 {
   s->ttl = ttl;
+  int rc = 0;
 
   if (sk_is_ipv4(s))
-    return sk_set_ttl4(s, ttl);
-  else
-    return sk_set_ttl6(s, ttl);
+    rc = sk_set_ttl4(s, ttl);
+
+  if (rc) return rc;
+  
+  if (sk_is_ipv6(s))
+    rc = sk_set_ttl6(s, ttl);
+
+  return rc;
 }
 
 /**
@@ -940,10 +969,17 @@ sk_set_ttl(sock *s, int ttl)
 int
 sk_set_min_ttl(sock *s, int ttl)
 {
+  int rc = 0;
+
   if (sk_is_ipv4(s))
-    return sk_set_min_ttl4(s, ttl);
-  else
-    return sk_set_min_ttl6(s, ttl);
+    rc = sk_set_min_ttl4(s, ttl);
+
+  if (rc) return rc;
+
+  if (sk_is_ipv6(s))
+    rc = sk_set_min_ttl6(s, ttl);
+
+  return rc;
 }
 
 #if 0
@@ -1244,7 +1280,7 @@ sk_setup(sock *s)
 
   if (sk_is_ipv6(s))
   {
-    if (s->flags & SKF_V6ONLY)
+    if (s->type != SK_IP && s->flags & SKF_V6ONLY)
       if (setsockopt(fd, SOL_IPV6, IPV6_V6ONLY, &y, sizeof(y)) < 0)
 	ERR("IPV6_V6ONLY");
 
@@ -1519,14 +1555,14 @@ sk_open_unix(sock *s, char *name)
 }
 
 
-#define CMSG_RX_SPACE MAX(CMSG4_SPACE_PKTINFO+CMSG4_SPACE_TTL, \
-			  CMSG6_SPACE_PKTINFO+CMSG6_SPACE_TTL)
+#define CMSG_RX_SPACE CMSG4_SPACE_PKTINFO+CMSG4_SPACE_TTL + \
+		      CMSG6_SPACE_PKTINFO+CMSG6_SPACE_TTL
 #define CMSG_TX_SPACE MAX(CMSG4_SPACE_PKTINFO,CMSG6_SPACE_PKTINFO)
 
 static void
 sk_prepare_cmsgs(sock *s, struct msghdr *msg, void *cbuf, size_t cbuflen)
 {
-  if (sk_is_ipv4(s))
+  if (sk_is_ipv4_only(s))
     sk_prepare_cmsgs4(s, msg, cbuf, cbuflen);
   else
     sk_prepare_cmsgs6(s, msg, cbuf, cbuflen);
@@ -1860,8 +1896,14 @@ sk_write(sock *s)
   }
 }
 
+int sk_is_ipv4_only(sock *s)
+{ return (s->af == AF_INET); }
+
+int sk_is_ipv6_only(sock *s)
+{ return (s->af == AF_INET6) && (s->flags & SKF_V6ONLY); }
+
 int sk_is_ipv4(sock *s)
-{ return s->af == AF_INET; }
+{ return (s->af == AF_INET) || (s->af == AF_INET6 && !(s->flags & SKF_V6ONLY)); }
 
 int sk_is_ipv6(sock *s)
 { return s->af == AF_INET6; }

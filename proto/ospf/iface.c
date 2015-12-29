@@ -120,7 +120,7 @@ ospf_sk_open(struct ospf_iface *ifa)
   sk->err_hook = ospf_err_hook;
   sk->rbsize = sk->tbsize = ifa_bufsize(ifa);
   sk->data = (void *) ifa;
-  sk->flags = SKF_LADDR_RX | (ifa->check_ttl ? SKF_TTL_RX : 0);
+  sk->flags = SKF_LADDR_RX | (ifa->check_ttl ? SKF_TTL_RX : 0) | (ospf_is_v2(p) ? SKF_V4ONLY : SKF_V6ONLY);
   sk->ttl = ifa->cf->ttl_security ? 255 : 1;
 
   if (sk_open(sk) < 0)
