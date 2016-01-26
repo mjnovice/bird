@@ -4,6 +4,8 @@ sha512.c
 sha512.h
 sha1.c
 sha1.h
+crypto.c
+crypto.h
 birdlib.h
 bitops.c
 bitops.h
