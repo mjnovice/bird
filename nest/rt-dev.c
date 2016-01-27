@@ -31,7 +31,7 @@ dev_ifa_notify(struct proto *p, unsigned c, struct ifa *ad)
 
   if (!EMPTY_LIST(P->iface_list) &&
       !iface_patt_find(&P->iface_list, ad->iface, ad->iface->addr))
-    /* Empty list is automagically treated as "*" */
+    /* Empty list is automatically treated as "*" */
     return;
 
   if (ad->flags & IA_SECONDARY)
@@ -63,6 +63,12 @@ dev_ifa_notify(struct proto *p, unsigned c, struct ifa *ad)
       rte *e;
 
       DBG("dev_if_notify: %s:%I going up\n", ad->iface->name, ad->ip);
+
+      if (ad->prefix.type != p->table->addr_type)
+      {
+	DBG("dev_if_notify: table %s and %N are not match types\n", p->table->name, ad->prefix);
+	return;
+      }
 
       /* Use iface ID as local source ID */
       struct rte_src *src = rt_get_source(p, ad->iface->index);
