@@ -18,9 +18,9 @@
 #include <net/route.h>
 #include <netinet/in.h>
 #include <net/pfkeyv2.h>
-#include <netipsec/keydb.h>
-#include <netipsec/key_debug.h>
+#ifndef __OpenBSD__
 #include <netipsec/ipsec.h>
+#endif
 #include <netdb.h>
 
 #include "sysdep/config.h"
@@ -213,6 +213,33 @@ sk_prepare_ip_header(sock *s, void *hdr, int dlen)
 #ifndef BUFSIZ
 #define BUFSIZ 8192
 #endif
+#ifndef PFKEY_UNUNIT64
+#define PFKEY_UNUNIT64(a)	((a) << 3)
+#endif
+#ifndef PFKEY_UNIT64
+#define PFKEY_UNIT64(a)		((a) >> 3)
+#endif
+#ifndef PFKEY_ALIGN8
+#define PFKEY_ALIGN8(a) (1 + (((a) - 1) | (8 - 1)))
+#endif
+#ifndef SADB_X_AALG_TCP_MD5
+#define SADB_X_AALG_TCP_MD5	252	/* Keyed TCP-MD5 (RFC2385) */
+struct sadb_x_sa2 {
+  u_int16_t sadb_x_sa2_len;
+  u_int16_t sadb_x_sa2_exttype;
+  u_int8_t sadb_x_sa2_mode;
+  u_int8_t sadb_x_sa2_reserved1;
+  u_int16_t sadb_x_sa2_reserved2;
+  u_int32_t sadb_x_sa2_sequence;	/* lowermost 32bit of sequence number */
+  u_int32_t sadb_x_sa2_reqid;
+};
+#endif
+#ifndef SADB_X_EXT_CYCSEQ
+#define SADB_X_EXT_CYCSEQ	0x0040	/* allowing to cyclic sequence. */
+#endif
+#ifndef IPSEC_MODE_ANY
+#define IPSEC_MODE_ANY		0	/* i.e. wildcard. */
+#endif
 
 /*
  * Open a socket for manage the IPsec SA/SP database entries
@@ -369,8 +396,10 @@ sk_set_md5_password_prepare(sockaddr *srcs, sockaddr *dsts, char *passwd, uint t
   salen = srcs->sa.sa_len;
   m_addr.sadb_address_len = PFKEY_UNIT64(sizeof(m_addr) + PFKEY_ALIGN8(salen));
   m_addr.sadb_address_exttype = SADB_EXT_ADDRESS_SRC;
+#ifndef __OpenBSD__
   m_addr.sadb_address_proto = IPSEC_ULPROTO_ANY;
   m_addr.sadb_address_prefixlen = prefix_len;
+#endif
   sk_set_md5_password_setvarbuf(buf, &l, (struct sadb_ext *)&m_addr, sizeof(m_addr), (caddr_t)sa, salen);
 
   /* set destination address */
@@ -378,8 +407,10 @@ sk_set_md5_password_prepare(sockaddr *srcs, sockaddr *dsts, char *passwd, uint t
   salen = dsts->sa.sa_len;
   m_addr.sadb_address_len = PFKEY_UNIT64(sizeof(m_addr) + PFKEY_ALIGN8(salen));
   m_addr.sadb_address_exttype = SADB_EXT_ADDRESS_DST;
+#ifndef __OpenBSD__
   m_addr.sadb_address_proto = IPSEC_ULPROTO_ANY;
   m_addr.sadb_address_prefixlen = prefix_len;
+#endif
   sk_set_md5_password_setvarbuf(buf, &l, (struct sadb_ext *)&m_addr, sizeof(m_addr), (caddr_t)sa, salen);
 
   msg->sadb_msg_len = PFKEY_UNIT64(l);
