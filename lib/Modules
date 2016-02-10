@@ -36,3 +36,4 @@ checksum.c
 checksum.h
 alloca.h
 net.c
+password.c
