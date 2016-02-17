@@ -229,7 +229,7 @@ sk_set_md5_auth_listening(sock *s, ip_addr local, ip_addr remote, struct iface *
 #ifdef USE_MD5SIG_SETKEY
   if (sk_set_md5_in_sasp_db(s, local, remote, ifa, passwd) && s->err)
   {
-    log(L_WARN "%s", s->err);
+    log(L_WARN "Socket: %s%#m", s->err);
   }
 #endif
   return sk_set_md5_auth(s, passwd);
