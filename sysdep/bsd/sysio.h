@@ -226,11 +226,13 @@ sk_set_md5_auth(sock *s, char *passwd)
 int
 sk_set_md5_auth_listening(sock *s, ip_addr local, ip_addr remote, struct iface *ifa, char *passwd)
 {
-  int err = 0;
 #ifdef USE_MD5SIG_SETKEY
-  err = sk_set_md5_in_sasp_db(s, local, remote, ifa, passwd); /* defined in setkey.h */
+  if (sk_set_md5_in_sasp_db(s, local, remote, ifa, passwd) && s->err)
+  {
+    log(L_WARN "%s", s->err);
+  }
 #endif
-  return (sk_set_md5_auth(s, passwd) | err);
+  return sk_set_md5_auth(s, passwd);
 }
 
 int
