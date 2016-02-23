@@ -119,9 +119,9 @@ ospf_neigh_down(struct ospf_neighbor *n)
   s_get(&(n->dbsi));
   release_lsrtl(p, n);
   rem_node(NODE n);
-  rfree(n->pool);
 
   OSPF_TRACE(D_EVENTS, "Neighbor %R on %s removed", n->rid, ifa->ifname);
+  rfree(n->pool);
 }
 
 /**
