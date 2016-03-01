@@ -215,6 +215,40 @@ mpnh__same(struct mpnh *x, struct mpnh *y)
   return x == y;
 }
 
+
+static int
+mpnh_compare_node(struct mpnh *x, struct mpnh *y)
+{
+   int r;
+
+     if (!x)
+          return 1;
+
+       if (!y)
+            return -1;
+
+         r = ((int) y->weight) - ((int) x->weight);
+    if (r)
+         return r;
+
+      r = ipa_compare(x->gw, y->gw);
+        if (r)
+             return r;
+
+          return ((int) x->iface->index) - ((int) y->iface->index);
+}
+
+static inline struct mpnh *
+mpnh_copy_node(const struct mpnh *src, linpool *lp)
+{
+   struct mpnh *n = lp_alloc(lp, sizeof(struct mpnh));
+     n->gw = src->gw;
+       n->iface = src->iface;
+         n->next = NULL;
+    n->weight = src->weight;
+      return n;
+}
+
 /**
  *  * mpnh_merge - merge nexthop lists
  *   * @x: list 1
