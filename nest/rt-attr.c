@@ -1,9 +1,9 @@
 /*
- *	BIRD -- Route Attribute Cache
+ *  BIRD -- Route Attribute Cache
  *
- *	(c) 1998--2000 Martin Mares <mj@ucw.cz>
+ *  (c) 1998--2000 Martin Mares <mj@ucw.cz>
  *
- *	Can be freely distributed and used under the terms of the GNU GPL.
+ *  Can be freely distributed and used under the terms of the GNU GPL.
  */
 
 /**
@@ -68,14 +68,14 @@ static u32 src_id_size, src_id_used, src_id_pos;
 
 /* rte source hash */
 
-#define RSH_KEY(n)		n->proto, n->private_id
-#define RSH_NEXT(n)		n->next
-#define RSH_EQ(p1,n1,p2,n2)	p1 == p2 && n1 == n2
-#define RSH_FN(p,n)		p->hash_key ^ u32_hash(n)
+#define RSH_KEY(n)    n->proto, n->private_id
+#define RSH_NEXT(n)    n->next
+#define RSH_EQ(p1,n1,p2,n2)  p1 == p2 && n1 == n2
+#define RSH_FN(p,n)    p->hash_key ^ u32_hash(n)
 
-#define RSH_REHASH		rte_src_rehash
-#define RSH_PARAMS		/2, *2, 1, 1, 8, 20
-#define RSH_INIT_ORDER		6
+#define RSH_REHASH    rte_src_rehash
+#define RSH_PARAMS    /2, *2, 1, 1, 8, 20
+#define RSH_INIT_ORDER    6
 
 static HASH(struct rte_src) src_hash;
 
@@ -192,7 +192,7 @@ rt_prune_sources(void)
 
 
 /*
- *	Multipath Next Hop
+ *  Multipath Next Hop
  */
 
 static inline unsigned int
@@ -213,6 +213,60 @@ mpnh__same(struct mpnh *x, struct mpnh *y)
       return 0;
 
   return x == y;
+}
+
+/**
+ *  * mpnh_merge - merge nexthop lists
+ *   * @x: list 1
+ *    * @y: list 2
+ *     * @rx: reusability of list @x
+ *      * @ry: reusability of list @y
+ *       * @max: max number of nexthops
+ *        * @lp: linpool for allocating nexthops
+ *         *
+ *          * The mpnh_merge() function takes two nexthop lists @x and @y and merges them,
+ *           * eliminating possible duplicates. The input lists must be sorted and the
+ *            * result is sorted too. The number of nexthops in result is limited by @max.
+ *             * New nodes are allocated from linpool @lp.
+ *              *
+ *               * The arguments @rx and @ry specify whether corresponding input lists may be
+ *                * consumed by the function (i.e. their nodes reused in the resulting list), in
+ *                 * that case the caller should not access these lists after that. To eliminate
+ *                  * issues with deallocation of these lists, the caller should use some form of
+ *                   * bulk deallocation (e.g. stack or linpool) to free these nodes when the
+ *                    * resulting list is no longer needed. When reusability is not set, the
+ *                     * corresponding lists are not modified nor linked from the resulting list.
+ *                      */
+struct mpnh *
+mpnh_merge(struct mpnh *x, struct mpnh *y, int rx, int ry, int max, linpool *lp)
+{
+    struct mpnh *root = NULL;
+      struct mpnh **n = &root;
+
+        while ((x || y) && max--)
+            {
+            int cmp = mpnh_compare_node(x, y);
+                if (cmp < 0)
+                {
+                        *n = rx ? x : mpnh_copy_node(x, lp);
+                        x = x->next;
+                      }
+              else if (cmp > 0)
+                    {
+                      *n = ry ? y : mpnh_copy_node(y, lp);
+                            y = y->next;
+                          }
+                  else
+                  {
+                          *n = rx ? x : (ry ? y : mpnh_copy_node(x, lp));
+                          x = x->next;
+                          y = y->next;
+                              }
+                n = &((*n)->next);
+                  }
+          *n = NULL;
+
+      return root;
 }
 
 static struct mpnh *
@@ -251,7 +305,7 @@ mpnh_free(struct mpnh *o)
 
 
 /*
- *	Extended Attributes
+ *  Extended Attributes
  */
 
 static inline eattr *
@@ -263,25 +317,25 @@ ea__find(ea_list *e, unsigned id)
   while (e)
     {
       if (e->flags & EALF_BISECT)
-	{
-	  l = 0;
-	  r = e->count - 1;
-	  while (l <= r)
-	    {
-	      m = (l+r) / 2;
-	      a = &e->attrs[m];
-	      if (a->id == id)
-		return a;
-	      else if (a->id < id)
-		l = m+1;
-	      else
-		r = m-1;
-	    }
-	}
+  {
+    l = 0;
+    r = e->count - 1;
+    while (l <= r)
+      {
+        m = (l+r) / 2;
+        a = &e->attrs[m];
+        if (a->id == id)
+    return a;
+        else if (a->id < id)
+    l = m+1;
+        else
+    r = m-1;
+      }
+  }
       else
-	for(m=0; m<e->count; m++)
-	  if (e->attrs[m].id == id)
-	    return &e->attrs[m];
+  for(m=0; m<e->count; m++)
+    if (e->attrs[m].id == id)
+      return &e->attrs[m];
       e = e->next;
     }
   return NULL;
@@ -339,33 +393,33 @@ ea_do_sort(ea_list *e)
     {
       s = ss = 0;
       while (s < n)
-	{
-	  eattr *p, *q, *lo, *hi;
-	  p = b;
-	  ss = s;
-	  *p++ = a[s++];
-	  while (s < n && p[-1].id <= a[s].id)
-	    *p++ = a[s++];
-	  if (s < n)
-	    {
-	      q = p;
-	      *p++ = a[s++];
-	      while (s < n && p[-1].id <= a[s].id)
-		*p++ = a[s++];
-	      lo = b;
-	      hi = q;
-	      s = ss;
-	      while (lo < q && hi < p)
-		if (lo->id <= hi->id)
-		  a[s++] = *lo++;
-		else
-		  a[s++] = *hi++;
-	      while (lo < q)
-		a[s++] = *lo++;
-	      while (hi < p)
-		a[s++] = *hi++;
-	    }
-	}
+  {
+    eattr *p, *q, *lo, *hi;
+    p = b;
+    ss = s;
+    *p++ = a[s++];
+    while (s < n && p[-1].id <= a[s].id)
+      *p++ = a[s++];
+    if (s < n)
+      {
+        q = p;
+        *p++ = a[s++];
+        while (s < n && p[-1].id <= a[s].id)
+    *p++ = a[s++];
+        lo = b;
+        hi = q;
+        s = ss;
+        while (lo < q && hi < p)
+    if (lo->id <= hi->id)
+      a[s++] = *lo++;
+    else
+      a[s++] = *hi++;
+        while (lo < q)
+    a[s++] = *lo++;
+        while (hi < p)
+    a[s++] = *hi++;
+      }
+  }
     }
   while (ss);
 }
@@ -383,15 +437,15 @@ ea_do_prune(ea_list *e)
     {
       s0 = s++;
       while (s < l && s->id == s[-1].id)
-	s++;
+  s++;
       /* s0 is the most recent version, s[-1] the oldest one */
       if ((s0->type & EAF_TYPE_MASK) != EAF_TYPE_UNDEF)
-	{
-	  *d = *s0;
-	  d->type = (d->type & ~EAF_ORIGINATED) | (s[-1].type & EAF_ORIGINATED);
-	  d++;
-	  i++;
-	}
+  {
+    *d = *s0;
+    d->type = (d->type & ~EAF_ORIGINATED) | (s[-1].type & EAF_ORIGINATED);
+    d++;
+    i++;
+  }
     }
   e->count = i;
 }
@@ -412,13 +466,13 @@ ea_sort(ea_list *e)
   while (e)
     {
       if (!(e->flags & EALF_SORTED))
-	{
-	  ea_do_sort(e);
-	  ea_do_prune(e);
-	  e->flags |= EALF_SORTED;
-	}
+  {
+    ea_do_sort(e);
+    ea_do_prune(e);
+    e->flags |= EALF_SORTED;
+  }
       if (e->count > 5)
-	e->flags |= EALF_BISECT;
+  e->flags |= EALF_BISECT;
       e = e->next;
     }
 }
@@ -498,10 +552,10 @@ ea_same(ea_list *x, ea_list *y)
       eattr *b = &y->attrs[c];
 
       if (a->id != b->id ||
-	  a->flags != b->flags ||
-	  a->type != b->type ||
-	  ((a->type & EAF_EMBEDDED) ? a->u.data != b->u.data : !adata_same(a->u.ptr, b->u.ptr)))
-	return 0;
+    a->flags != b->flags ||
+    a->type != b->type ||
+    ((a->type & EAF_EMBEDDED) ? a->u.data != b->u.data : !adata_same(a->u.ptr, b->u.ptr)))
+  return 0;
     }
   return 1;
 }
@@ -523,12 +577,12 @@ ea_list_copy(ea_list *o)
     {
       eattr *a = &n->attrs[i];
       if (!(a->type & EAF_EMBEDDED))
-	{
-	  unsigned size = sizeof(struct adata) + a->u.ptr->length;
-	  struct adata *d = mb_alloc(rta_pool, size);
-	  memcpy(d, a->u.ptr, size);
-	  a->u.ptr = d;
-	}
+  {
+    unsigned size = sizeof(struct adata) + a->u.ptr->length;
+    struct adata *d = mb_alloc(rta_pool, size);
+    memcpy(d, a->u.ptr, size);
+    a->u.ptr = d;
+  }
     }
   return n;
 }
@@ -542,11 +596,11 @@ ea_free(ea_list *o)
     {
       ASSERT(!o->next);
       for(i=0; i<o->count; i++)
-	{
-	  eattr *a = &o->attrs[i];
-	  if (!(a->type & EAF_EMBEDDED))
-	    mb_free(a->u.ptr);
-	}
+  {
+    eattr *a = &o->attrs[i];
+    if (!(a->type & EAF_EMBEDDED))
+      mb_free(a->u.ptr);
+  }
       mb_free(o);
     }
 }
@@ -572,12 +626,12 @@ opaque_format(struct adata *ad, byte *buf, unsigned int size)
   for(i = 0; i < ad->length; i++)
     {
       if (buf > bound)
-	{
-	  strcpy(buf, " ...");
-	  return;
-	}
+  {
+    strcpy(buf, " ...");
+    return;
+  }
       if (i)
-	*buf++ = ' ';
+  *buf++ = ' ';
 
       buf += bsprintf(buf, "%02x", ad->data[i]);
     }
@@ -634,7 +688,7 @@ ea_show(struct cli *c, eattr *e)
     {
       pos += bsprintf(pos, "%s.", p->name);
       if (p->get_attr)
-	status = p->get_attr(e, pos, end - pos);
+  status = p->get_attr(e, pos, end - pos);
       pos += strlen(pos);
     }
   else if (EA_PROTO(e->id))
@@ -649,32 +703,32 @@ ea_show(struct cli *c, eattr *e)
       *pos++ = ':';
       *pos++ = ' ';
       switch (e->type & EAF_TYPE_MASK)
-	{
-	case EAF_TYPE_INT:
-	  bsprintf(pos, "%u", e->u.data);
-	  break;
-	case EAF_TYPE_OPAQUE:
-	  opaque_format(ad, pos, end - pos);
-	  break;
-	case EAF_TYPE_IP_ADDRESS:
-	  bsprintf(pos, "%I", *(ip_addr *) ad->data);
-	  break;
-	case EAF_TYPE_ROUTER_ID:
-	  bsprintf(pos, "%R", e->u.data);
-	  break;
-	case EAF_TYPE_AS_PATH:
-	  as_path_format(ad, pos, end - pos);
-	  break;
-	case EAF_TYPE_INT_SET:
-	  ea_show_int_set(c, ad, 1, pos, buf, end);
-	  return;
-	case EAF_TYPE_EC_SET:
-	  ea_show_ec_set(c, ad, pos, buf, end);
-	  return;
-	case EAF_TYPE_UNDEF:
-	default:
-	  bsprintf(pos, "<type %02x>", e->type);
-	}
+  {
+  case EAF_TYPE_INT:
+    bsprintf(pos, "%u", e->u.data);
+    break;
+  case EAF_TYPE_OPAQUE:
+    opaque_format(ad, pos, end - pos);
+    break;
+  case EAF_TYPE_IP_ADDRESS:
+    bsprintf(pos, "%I", *(ip_addr *) ad->data);
+    break;
+  case EAF_TYPE_ROUTER_ID:
+    bsprintf(pos, "%R", e->u.data);
+    break;
+  case EAF_TYPE_AS_PATH:
+    as_path_format(ad, pos, end - pos);
+    break;
+  case EAF_TYPE_INT_SET:
+    ea_show_int_set(c, ad, 1, pos, buf, end);
+    return;
+  case EAF_TYPE_EC_SET:
+    ea_show_ec_set(c, ad, pos, buf, end);
+    return;
+  case EAF_TYPE_UNDEF:
+  default:
+    bsprintf(pos, "<type %02x>", e->type);
+  }
     }
   cli_printf(c, -1012, "\t%s", buf);
 }
@@ -699,30 +753,30 @@ ea_dump(ea_list *e)
   while (e)
     {
       debug("[%c%c%c]",
-	    (e->flags & EALF_SORTED) ? 'S' : 's',
-	    (e->flags & EALF_BISECT) ? 'B' : 'b',
-	    (e->flags & EALF_CACHED) ? 'C' : 'c');
+      (e->flags & EALF_SORTED) ? 'S' : 's',
+      (e->flags & EALF_BISECT) ? 'B' : 'b',
+      (e->flags & EALF_CACHED) ? 'C' : 'c');
       for(i=0; i<e->count; i++)
-	{
-	  eattr *a = &e->attrs[i];
-	  debug(" %02x:%02x.%02x", EA_PROTO(a->id), EA_ID(a->id), a->flags);
-	  if (a->type & EAF_TEMP)
-	    debug("T");
-	  debug("=%c", "?iO?I?P???S?????" [a->type & EAF_TYPE_MASK]);
-	  if (a->type & EAF_ORIGINATED)
-	    debug("o");
-	  if (a->type & EAF_EMBEDDED)
-	    debug(":%08x", a->u.data);
-	  else
-	    {
-	      int j, len = a->u.ptr->length;
-	      debug("[%d]:", len);
-	      for(j=0; j<len; j++)
-		debug("%02x", a->u.ptr->data[j]);
-	    }
-	}
+  {
+    eattr *a = &e->attrs[i];
+    debug(" %02x:%02x.%02x", EA_PROTO(a->id), EA_ID(a->id), a->flags);
+    if (a->type & EAF_TEMP)
+      debug("T");
+    debug("=%c", "?iO?I?P???S?????" [a->type & EAF_TYPE_MASK]);
+    if (a->type & EAF_ORIGINATED)
+      debug("o");
+    if (a->type & EAF_EMBEDDED)
+      debug(":%08x", a->u.data);
+    else
+      {
+        int j, len = a->u.ptr->length;
+        debug("[%d]:", len);
+        for(j=0; j<len; j++)
+    debug("%02x", a->u.ptr->data[j]);
+      }
+  }
       if (e = e->next)
-	debug(" | ");
+  debug(" | ");
     }
 }
 
@@ -739,29 +793,29 @@ ea_hash(ea_list *e)
   u32 h = 0;
   int i;
 
-  if (e)			/* Assuming chain of length 1 */
+  if (e)      /* Assuming chain of length 1 */
     {
       for(i=0; i<e->count; i++)
-	{
-	  struct eattr *a = &e->attrs[i];
-	  h ^= a->id;
-	  if (a->type & EAF_EMBEDDED)
-	    h ^= a->u.data;
-	  else
-	    {
-	      struct adata *d = a->u.ptr;
-	      int size = d->length;
-	      byte *z = d->data;
-	      while (size >= 4)
-		{
-		  h ^= *(u32 *)z;
-		  z += 4;
-		  size -= 4;
-		}
-	      while (size--)
-		h = (h >> 24) ^ (h << 8) ^ *z++;
-	    }
-	}
+  {
+    struct eattr *a = &e->attrs[i];
+    h ^= a->id;
+    if (a->type & EAF_EMBEDDED)
+      h ^= a->u.data;
+    else
+      {
+        struct adata *d = a->u.ptr;
+        int size = d->length;
+        byte *z = d->data;
+        while (size >= 4)
+    {
+      h ^= *(u32 *)z;
+      z += 4;
+      size -= 4;
+    }
+        while (size--)
+    h = (h >> 24) ^ (h << 8) ^ *z++;
+      }
+  }
       h ^= h >> 16;
       h ^= h >> 6;
       h &= 0xffff;
@@ -792,7 +846,7 @@ ea_append(ea_list *to, ea_list *what)
 }
 
 /*
- *	rta's
+ *  rta's
  */
 
 static unsigned int rta_cache_count;
@@ -816,25 +870,25 @@ static inline unsigned int
 rta_hash(rta *a)
 {
   return (((uint) (uintptr_t) a->src) ^ ipa_hash(a->gw) ^
-	  mpnh_hash(a->nexthops) ^ ea_hash(a->eattrs)) & 0xffff;
+    mpnh_hash(a->nexthops) ^ ea_hash(a->eattrs)) & 0xffff;
 }
 
 static inline int
 rta_same(rta *x, rta *y)
 {
   return (x->src == y->src &&
-	  x->source == y->source &&
-	  x->scope == y->scope &&
-	  x->cast == y->cast &&
-	  x->dest == y->dest &&
-	  x->flags == y->flags &&
-	  x->igp_metric == y->igp_metric &&
-	  ipa_equal(x->gw, y->gw) &&
-	  ipa_equal(x->from, y->from) &&
-	  x->iface == y->iface &&
-	  x->hostentry == y->hostentry &&
-	  mpnh_same(x->nexthops, y->nexthops) &&
-	  ea_same(x->eattrs, y->eattrs));
+    x->source == y->source &&
+    x->scope == y->scope &&
+    x->cast == y->cast &&
+    x->dest == y->dest &&
+    x->flags == y->flags &&
+    x->igp_metric == y->igp_metric &&
+    ipa_equal(x->gw, y->gw) &&
+    ipa_equal(x->from, y->from) &&
+    x->iface == y->iface &&
+    x->hostentry == y->hostentry &&
+    mpnh_same(x->nexthops, y->nexthops) &&
+    ea_same(x->eattrs, y->eattrs));
 }
 
 static rta *
@@ -874,8 +928,8 @@ rta_rehash(void)
   for(h=0; h<ohs; h++)
     for(r=oht[h]; r; r=n)
       {
-	n = r->next;
-	rta_insert(r);
+  n = r->next;
+  rta_insert(r);
       }
   mb_free(oht);
 }
@@ -902,12 +956,12 @@ rta_lookup(rta *o)
   ASSERT(!(o->aflags & RTAF_CACHED));
   if (o->eattrs)
     {
-      if (o->eattrs->next)	/* Multiple ea_list's, need to merge them */
-	{
-	  ea_list *ml = alloca(ea_scan(o->eattrs));
-	  ea_merge(o->eattrs, ml);
-	  o->eattrs = ml;
-	}
+      if (o->eattrs->next)  /* Multiple ea_list's, need to merge them */
+  {
+    ea_list *ml = alloca(ea_scan(o->eattrs));
+    ea_merge(o->eattrs, ml);
+    o->eattrs = ml;
+  }
       ea_sort(o->eattrs);
     }
 
@@ -937,7 +991,7 @@ rta__free(rta *a)
   *a->pprev = a->next;
   if (a->next)
     a->next->pprev = a->pprev;
-  a->aflags = 0;		/* Poison the entry */
+  a->aflags = 0;    /* Poison the entry */
   rt_unlock_hostentry(a->hostentry);
   rt_unlock_source(a->src);
   mpnh_free(a->nexthops);
@@ -965,15 +1019,15 @@ void
 rta_dump(rta *a)
 {
   static char *rts[] = { "RTS_DUMMY", "RTS_STATIC", "RTS_INHERIT", "RTS_DEVICE",
-			 "RTS_STAT_DEV", "RTS_REDIR", "RTS_RIP",
-			 "RTS_OSPF", "RTS_OSPF_IA", "RTS_OSPF_EXT1",
+       "RTS_STAT_DEV", "RTS_REDIR", "RTS_RIP",
+       "RTS_OSPF", "RTS_OSPF_IA", "RTS_OSPF_EXT1",
                          "RTS_OSPF_EXT2", "RTS_BGP" };
   static char *rtc[] = { "", " BC", " MC", " AC" };
   static char *rtd[] = { "", " DEV", " HOLE", " UNREACH", " PROHIBIT" };
 
   debug("p=%s uc=%d %s %s%s%s h=%04x",
-	a->src->proto->name, a->uc, rts[a->source], ip_scope_text(a->scope), rtc[a->cast],
-	rtd[a->dest], a->hash_key);
+  a->src->proto->name, a->uc, rts[a->source], ip_scope_text(a->scope), rtc[a->cast],
+  rtd[a->dest], a->hash_key);
   if (!(a->aflags & RTAF_CACHED))
     debug(" !CACHED");
   debug(" <-%I", a->from);
@@ -1004,9 +1058,9 @@ rta_dump_all(void)
   for(h=0; h<rta_cache_size; h++)
     for(a=rta_hash_table[h]; a; a=a->next)
       {
-	debug("%p ", a);
-	rta_dump(a);
-	debug("\n");
+  debug("%p ", a);
+  rta_dump(a);
+  debug("\n");
       }
   debug("\n");
 }
@@ -1015,7 +1069,7 @@ void
 rta_show(struct cli *c, rta *a, ea_list *eal)
 {
   static char *src_names[] = { "dummy", "static", "inherit", "device", "static-device", "redirect",
-			       "RIP", "OSPF", "OSPF-IA", "OSPF-E1", "OSPF-E2", "BGP", "pipe" };
+             "RIP", "OSPF", "OSPF-IA", "OSPF-E1", "OSPF-E2", "BGP", "pipe" };
   static char *cast_names[] = { "unicast", "broadcast", "multicast", "anycast" };
   int i;
 
